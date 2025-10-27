@@ -2,9 +2,25 @@
   "name": "backend",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "tsx -r tsconfig-paths/register --watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "prisma:generate": "prisma generate",
+    "prisma:studio": "prisma studio --hostname 0.0.0.0 --browser none",
+    "prisma:validate": "prisma validate",
+    "prisma:format": "prisma format",
+    "prisma:doctor": "prisma doctor",
+    "db:migrate:dev": "prisma migrate dev --name init",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:reset": "prisma migrate reset --force",
+    "db:push": "prisma db push",
+    "db:seed": "ts-node prisma/seed.ts",
+    "docker:prisma:generate": "npx prisma generate --schema=./prisma/schema.prisma",
+    "docker:prisma:deploy": "npx prisma migrate deploy",
+    "db:prepare": "npm run prisma:generate && npm run db:migrate:deploy",
+    "postinstall": "prisma generate"
   },
   "repository": {
     "type": "git",
@@ -13,9 +29,31 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/lucasll37/myfinanceapp_backend/issues"
   },
-  "homepage": "https://github.com/lucasll37/myfinanceapp_backend#readme"
+  "homepage": "https://github.com/lucasll37/myfinanceapp_backend#readme",
+  "dependencies": {
+    "@prisma/client": "^6.18.0",
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.1.0"
+  },
+  "devDependencies": {
+    "@types/compression": "^1.8.1",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.4",
+    "@types/helmet": "^0.0.48",
+    "@types/node": "^24.9.1",
+    "globals": "^16.4.0",
+    "prisma": "^6.18.0",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
 }

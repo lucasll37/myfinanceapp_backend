@@ -1,0 +1,111 @@
+version: "3.9"
+
+networks:
+  app_network:
+    driver: bridge
+
+volumes:
+  pgdata:
+  redisdata:
+
+services:
+  # ---------- API (DEV) ----------
+  api-dev:
+    profiles: ["dev"]
+    build:
+      context: .
+      target: dev
+    container_name: node-ts-api-dev
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DATABASE_URL=postgresql://admin:admin@db:5432/appdb?schema=public
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app:cached
+      - /app/node_modules
+    command: ["npx", "tsx", "watch", "src/index.ts"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  # ---------- API (PROD) ----------
+  api:
+    profiles: ["prod"]
+    build:
+      context: .
+      target: prod
+    container_name: node-ts-api
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://admin:admin@db:5432/appdb?schema=public
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      # Opcional: SKIP_MIGRATIONS=1 para pular migrate deploy no entrypoint
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  # ---------- BANCO DE DADOS (PostgreSQL) ----------
+  db:
+    image: postgres:16-alpine
+    container_name: node-ts-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_DB=appdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d appdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------- CACHE (Redis) ----------
+  redis:
+    image: redis:7-alpine
+    container_name: node-ts-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5

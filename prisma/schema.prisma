@@ -1,0 +1,279 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum AccountType {
+  pessoal
+  conjunta
+  empresarial
+  investimento
+}
+
+enum AccountMemberRole {
+  owner
+  admin
+  editor
+  viewer
+}
+
+enum MemberStatus {
+  pending
+  active
+  suspended
+}
+
+enum CategoryType {
+  receita
+  despesa
+}
+
+enum SubscriptionTier {
+  free
+  premium
+  business
+}
+
+// Models
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String   @map("password_hash")
+  fullName      String   @map("full_name")
+  avatarUrl     String?  @map("avatar_url")
+  emailVerified Boolean  @default(false) @map("email_verified")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  preferences         UserPreferences?
+  subscription        Subscription?
+  accountMembers      AccountMember[]
+  transactionsCreated Transaction[]    @relation("CreatedTransactions")
+  goalsCreated        Goal[]           @relation("CreatedGoals")
+  notifications       Notification[]
+  invitedMembers      AccountMember[]  @relation("InvitedBy")
+
+  @@map("users")
+}
+
+model UserPreferences {
+  id            String   @id @default(uuid())
+  userId        String   @unique @map("user_id")
+  theme         String   @default("system")
+  language      String   @default("pt-BR")
+  currency      String   @default("BRL")
+  dateFormat    String   @default("DD/MM/YYYY") @map("date_format")
+  notifications Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model Subscription {
+  id        String           @id @default(uuid())
+  userId    String           @unique @map("user_id")
+  tier      SubscriptionTier @default(free)
+  startDate DateTime         @default(now()) @map("start_date")
+  endDate   DateTime?        @map("end_date")
+  isActive  Boolean          @default(true) @map("is_active")
+  autoRenew Boolean          @default(false) @map("auto_renew")
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+model Account {
+  id             String      @id @default(uuid())
+  name           String
+  type           AccountType @default(pessoal)
+  initialBalance Decimal     @default(0) @map("initial_balance") @db.Decimal(15, 2)
+  currentBalance Decimal     @default(0) @map("current_balance") @db.Decimal(15, 2)
+  currency       String      @default("BRL")
+  color          String?
+  icon           String?
+  isActive       Boolean     @default(true) @map("is_active")
+  deletedAt      DateTime?   @map("deleted_at")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  members      AccountMember[]
+  categories   Category[]
+  transactions Transaction[]
+  budgets      Budget[]
+  goals        Goal[]
+  investments  InvestmentAsset[]
+
+  @@map("accounts")
+}
+
+model AccountMember {
+  id         String            @id @default(uuid())
+  accountId  String            @map("account_id")
+  userId     String            @map("user_id")
+  role       AccountMemberRole @default(viewer)
+  status     MemberStatus      @default(pending)
+  invitedBy  String?           @map("invited_by")
+  invitedAt  DateTime          @default(now()) @map("invited_at")
+  acceptedAt DateTime?         @map("accepted_at")
+  createdAt  DateTime          @default(now()) @map("created_at")
+  updatedAt  DateTime          @updatedAt @map("updated_at")
+
+  // Relations
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inviter User?   @relation("InvitedBy", fields: [invitedBy], references: [id])
+
+  @@unique([accountId, userId])
+  @@map("account_members")
+}
+
+model Category {
+  id        String       @id @default(uuid())
+  accountId String       @map("account_id")
+  name      String
+  type      CategoryType
+  parentId  String?      @map("parent_id")
+  color     String?
+  icon      String?
+  isActive  Boolean      @default(true) @map("is_active")
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  account      Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  parent       Category?     @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children     Category[]    @relation("CategoryHierarchy")
+  transactions Transaction[]
+  budgets      Budget[]
+
+  @@map("categories")
+}
+
+model Transaction {
+  id            String       @id @default(uuid())
+  accountId     String       @map("account_id")
+  categoryId    String?      @map("category_id")
+  date          DateTime     @db.Date
+  description   String?      @db.VarChar(500)
+  amount        Decimal      @db.Decimal(15, 2)
+  type          CategoryType
+  paymentMethod String?      @map("payment_method") @db.VarChar(50)
+  notes         String?      @db.Text
+  tags          String[]
+  isRecurring   Boolean      @default(false) @map("is_recurring")
+  createdBy     String?      @map("created_by")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  account  Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  creator  User?     @relation("CreatedTransactions", fields: [createdBy], references: [id])
+
+  @@map("transactions")
+}
+
+model Budget {
+  id             String    @id @default(uuid())
+  accountId      String    @map("account_id")
+  categoryId     String?   @map("category_id")
+  name           String
+  amount         Decimal   @db.Decimal(15, 2)
+  period         String    @default("monthly")
+  startDate      DateTime  @map("start_date") @db.Date
+  endDate        DateTime? @map("end_date") @db.Date
+  alertThreshold Int?      @map("alert_threshold")
+  isActive       Boolean   @default(true) @map("is_active")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  account  Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@map("budgets")
+}
+
+model Goal {
+  id            String    @id @default(uuid())
+  accountId     String    @map("account_id")
+  name          String
+  description   String?   @db.Text
+  targetAmount  Decimal   @map("target_amount") @db.Decimal(15, 2)
+  currentAmount Decimal   @default(0) @map("current_amount") @db.Decimal(15, 2)
+  deadline      DateTime? @db.Date
+  color         String?
+  icon          String?
+  isAchieved    Boolean   @default(false) @map("is_achieved")
+  achievedAt    DateTime? @map("achieved_at")
+  createdBy     String?   @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  creator User?   @relation("CreatedGoals", fields: [createdBy], references: [id])
+
+  @@map("goals")
+}
+
+model InvestmentAsset {
+  id                String   @id @default(uuid())
+  accountId         String   @map("account_id")
+  name              String
+  type              String
+  ticker            String?
+  quantity          Decimal  @db.Decimal(15, 8)
+  averagePrice      Decimal  @map("average_price") @db.Decimal(15, 2)
+  currentPrice      Decimal  @map("current_price") @db.Decimal(15, 2)
+  totalValue        Decimal  @map("total_value") @db.Decimal(15, 2)
+  profitLoss        Decimal? @map("profit_loss") @db.Decimal(15, 2)
+  profitLossPercent Decimal? @map("profit_loss_percent") @db.Decimal(10, 2)
+  lastUpdated       DateTime @default(now()) @map("last_updated")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("investment_assets")
+}
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  type      String
+  title     String
+  message   String    @db.Text
+  isRead    Boolean   @default(false) @map("is_read")
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
