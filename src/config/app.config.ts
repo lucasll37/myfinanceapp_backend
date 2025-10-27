@@ -9,7 +9,7 @@ dotenv.config();
 
 // Validação de variáveis obrigatórias
 const requiredEnvVars = [
-  "DATABASE_URL", "PORT", "JWT_SECRET", "HOST", "CORS_ORIGINS", "JWT_EXPIRES_IN",
+  "DATABASE_URL", "PORT", "JWT_SECRET", "SERVER_HOST", "CORS_ORIGINS", "JWT_EXPIRES_IN",
   "RATE_LIMIT_WINDOW_MS", "RATE_LIMIT_MAX", "LOG_LEVEL", "NODE_ENV"] as const;
 
 for (const envVar of requiredEnvVars) {

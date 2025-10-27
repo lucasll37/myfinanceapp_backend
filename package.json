@@ -19,8 +19,7 @@
     "db:seed": "ts-node prisma/seed.ts",
     "docker:prisma:generate": "npx prisma generate --schema=./prisma/schema.prisma",
     "docker:prisma:deploy": "npx prisma migrate deploy",
-    "db:prepare": "npm run prisma:generate && npm run db:migrate:deploy",
-    "postinstall": "prisma generate"
+    "db:prepare": "npm run prisma:generate && npm run db:migrate:deploy"
   },
   "repository": {
     "type": "git",

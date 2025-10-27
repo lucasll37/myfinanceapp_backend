@@ -9,55 +9,48 @@ volumes:
   redisdata:
 
 services:
-  # ---------- API (DEV) ----------
-  api-dev:
-    profiles: ["dev"]
-    build:
-      context: .
-      target: dev
-    container_name: node-ts-api-dev
-    environment:
-      - NODE_ENV=development
-      - PORT=3000
-      - DATABASE_URL=postgresql://admin:admin@db:5432/appdb?schema=public
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    ports:
-      - "3000:3000"
-    volumes:
-      - .:/app:cached
-      - /app/node_modules
-    command: ["npx", "tsx", "watch", "src/index.ts"]
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    networks:
-      - app_network
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
-
-  # ---------- API (PROD) ----------
+  # ========================================
+  # API - Aplicação Node.js
+  # ========================================
   api:
-    profiles: ["prod"]
     build:
       context: .
-      target: prod
+      dockerfile: Dockerfile
     container_name: node-ts-api
+    restart: unless-stopped
     environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - DATABASE_URL=postgresql://admin:admin@db:5432/appdb?schema=public
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      # Opcional: SKIP_MIGRATIONS=1 para pular migrate deploy no entrypoint
+      # Application
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${PORT:-3000}
+      SERVER_HOST: ${SERVER_HOST:-0.0.0.0}
+      
+      # Database
+      DATABASE_URL: postgresql://admin:admin@db:5432/appdb?schema=public
+      # DATABASE_URL: ${DATABASE_URL:-postgresql://admin:admin@db:5432/appdb?schema=public}
+      
+      # JWT
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-this-in-production}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      
+      # CORS
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      
+      # Rate Limiting
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+      
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      
+      # Redis (opcional)
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      
+      # Docker específico
+      SKIP_MIGRATIONS: ${SKIP_MIGRATIONS:-0}
+      
     ports:
-      - "3000:3000"
+      - "${PORT:-3000}:3000"
     depends_on:
       db:
         condition: service_healthy
@@ -66,40 +59,47 @@ services:
     networks:
       - app_network
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-      start_period: 10s
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
-  # ---------- BANCO DE DADOS (PostgreSQL) ----------
+  # ========================================
+  # PostgreSQL - Banco de Dados
+  # ========================================
   db:
     image: postgres:16-alpine
     container_name: node-ts-db
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=admin
-      - POSTGRES_DB=appdb
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+      POSTGRES_DB: ${POSTGRES_DB:-appdb}
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
     ports:
-      - "5432:5432"
+      - "${DB_HOST_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
       - app_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d appdb"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-appdb}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
-  # ---------- CACHE (Redis) ----------
+  # ========================================
+  # Redis - Cache (Opcional)
+  # ========================================
   redis:
     image: redis:7-alpine
     container_name: node-ts-redis
     restart: unless-stopped
+    command: redis-server --appendonly yes
     ports:
-      - "6379:6379"
+      - "${REDIS_HOST_PORT:-6379}:6379"
     volumes:
       - redisdata:/data
     networks:
@@ -107,5 +107,6 @@ services:
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
-      timeout: 3s
+      timeout: 5s
       retries: 5
+      start_period: 5s
